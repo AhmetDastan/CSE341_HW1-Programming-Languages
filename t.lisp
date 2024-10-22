@@ -4,6 +4,7 @@
 (defvar curr-convert-foo nil)
 (defvar converted-line nil)
 (defvar converted-lines '()) 
+   
 
 ;; This function takes converted-lines and print to target new file
 (defun write-file (filename converted-lines)
@@ -16,8 +17,8 @@
   (cond
     ((search  "if" line) 'if)
     ((search  "for" line) 'for)
-    ((search  "while" line) 'while)
-    (t 'unknown)))
+    ((search  "while" line) 'while)  
+    (t 'exception)))
 
 
 ;; this function get filename and their index as arguments. And return the spesific line as a arguments
@@ -34,61 +35,86 @@
     ((eq line-type 'if) 'convert-if)
     ((eq line-type 'for) 'convert-for)
     ((eq line-type 'while) 'convert-while)
-    ((eq line-type 'statement) 'convert-statement)
+    ((eq line-type 'statement) 'convert-statement) 
+    ((eq line-type 'exception) 'convert-exception)
     (t 'convert-unknown)))          
+ 
 
-;; Convert if statements
 (defun convert-if (line)
-  (let ((start (search "if" line)))
-    (if start
-        (concatenate 'string 
-                     (subseq line 0 start)        ; Before the substring
-                     "when"                        ; Replacement string
-                     (subseq line (+ start (length "if")))) ; After the substring
-        line)))
-;; Convert while loops
+  (let* ((start (position #\( line))  ;; İlk parantez pozisyonu
+         (end (position #\) line))    ;; Son parantez pozisyonu
+         (condition (subseq line (+ start 1) end))  ;; Parantezler arasındaki kısmı al
+         (parts (split-string condition)))  ;; Şartı boşluklara göre ayır
+    ;; 'if' yapısını oluşturuyoruz
+    (let ((new-line (format nil "(if (~a ~a ~a)" (second parts) (first parts) (third parts))))
+      ;; Eğer satırda '{' varsa, satırın sonuna '(' ekle
+      (if (position #\{ line)
+          (concatenate 'string new-line "(")
+          new-line))))  ;; Yoksa olduğu gibi döndü
+
+(defun split-string (line)
+  ;; Satırı boşluklara göre ayıran basit bir fonksiyon
+  (let ((start 0)
+        (tokens '()))
+    (loop for i from 0 to (length line)
+          when (or (= i (length line)) (char= (char line i) #\Space))
+          do (progn
+               (push (subseq line start i) tokens)
+               (setf start (1+ i))))
+    (reverse tokens)))
+
+
+  
+
 (defun convert-while (line)
-  (replace-regexp-in-string "while" "loop while" line))
+  )
 (defun convert-for (line)
-  (replace-regexp-in-string "while" "loop while" line))
+  )
 (defun convert-statement (line)
-  (replace-regexp-in-string "while" "loop while" line))
-(defun convert-unknown (line)
-  (replace-regexp-in-string "while" "loop while" line))
+  )
+
+(defun convert-unknown (line) ;;(replace-regexp-in-string "while" "loop while" line)
+  )
+
+#|(defun convert-exception (line) 
+   (cond
+    ((search "{" line) "(")       
+    ((search "}" line) ")")    
+    ((search "printf" line) ")")    
+    (t line)) )  |#
+
+(defun convert-exception (line) 
+  (cond
+    ((search "printf(" line)  ; printf kontrolü yapıyoruz
+     (let* ((start (position #\" line))            ; İlk çift tırnağın yerini bul
+            (end (position #\\ line :start (1+ start)))  ; İkinci çift tırnağı bul
+            (content (subseq line (1+ start) end))) ; Çift tırnaklar arasındaki kısmı al
+       (format nil " (format t \"~a~a" content "~%\")"))) ; format t stringine dönüştür
+    ((search "{" line) "(")   
+    ((search "}" line) ")")   
+    (t line)))                    ; Hiçbiri yoksa orijinal stringi döner
+
+
+(defun recursive-conversion (counter)
+  (when (read-file "main.c" counter)
+    ;;(format t "Current counter: ~A~%" counter)
+    (setq curr-line (read-file "main.c" counter))
+    (setq curr-type (line-type curr-line))
+    ;;(format t "Current type: ~A~%" curr-type)
+    (setq curr-convert-foo (conversion-foo curr-type))
+    ;;(format t "curr-convert-foo2: ~A~%" curr-convert-foo)
+    (setq converted-line (convert curr-line curr-convert-foo))
+    ;;(format t "Converteed : ~A~%" converted-line)
+    (push converted-line converted-lines)
+    
+    (recursive-conversion (+ 1 counter))
+    ))
 
 ;; convert function call spesific conver-foo
 (defun convert (line con-foo)
   (funcall con-foo line))
 
-
-
-
-(defun recursive-conversion (counter)
-  (when (read-file "main.c" counter)
-    (format t "Current counter: ~A~%" counter)
-    (setq curr-line (read-file "main.c" counter))
-    (setq curr-type (line-type curr-line))
-    (setq curr-convert-foo (conversion-foo curr-type))
-    (setq converted-line (convert curr-line curr-convert-foo))
-    (push converted-line converted-lines)
-    (recursive-conversion (+ 1 counter))
-    ))
-
-
 (print "ananas")
 (recursive-conversion 0)
 (write-file "new.lisp" (nreverse converted-lines)) 
-
-#| 
-(setq curr-line (read-file "main.c" 0))          ;; read a current-line
-(format t "Raw line read: ~a~%" curr-line)
-
-(setq curr-type (line-type curr-line))        ;; send current-line to get current-type
-(format t "Raw curr type: ~a~%" curr-type)
-
-(setq curr-convert-foo (conversion-foo curr-type))
-(format t "Raw line convert foo: ~a~%" curr-convert-foo)
  
-(setq converted-line (convert curr-line 'convert-if))  
-(format t "Raw line converted line: ~a~%" converted-line)
-|#
